@@ -95,7 +95,7 @@ class ilScormAiccImporter extends ilXmlImporter
                             $a_mapping !== null &&
                             ($new_id = $a_mapping->getMapping('components/ILIAS/Container', 'objs', $a_id))) {
                             $new_object = ilObjectFactory::getInstanceByObjId((int) $new_id, false);
-                            $xml_directory = $this->getImportDirectory();
+                            $xml_directory = $this->getModuleImportDirectory($a_id);
                         }
 
                         return $this->df->ok($xml_directory);
@@ -223,6 +223,28 @@ class ilScormAiccImporter extends ilXmlImporter
                     return null;
                 })
         );
+    }
+
+    /**
+     * In the export of a container, the SCORM modules it contains are also listed in the export set of the
+     * container, but their properties.xml and content.zip are only written to the module's own export set
+     * (set_N/<timestamp>__<installation id>__sahs_<obj id>/). As the module is imported at its first occurrence,
+     * the one in the container's set, and the module's own set is skipped afterwards, the module is looked up
+     * in its own set if the current import directory does not contain it.
+     */
+    private function getModuleImportDirectory(string $a_id): string
+    {
+        $import_directory = $this->getImportDirectory();
+        if (is_file($import_directory . '/properties.xml') || !preg_match('/^\d+$/', $a_id)) {
+            return $import_directory;
+        }
+        $candidates = glob(dirname($import_directory, 2) . '/set_*/*__sahs_' . $a_id, GLOB_ONLYDIR) ?: [];
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate . '/properties.xml') && is_file($candidate . '/content.zip')) {
+                return $candidate;
+            }
+        }
+        return $import_directory;
     }
 
     public function writeData(string $a_entity, string $a_version, int $a_id): void
